@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2491 NoMythic CAD Dojo</title>
+    <style>
+        :root { --primary: #000000; --accent: #FFD700; --bg: #f4f4f9; --text: #333; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        
+        /* Layout */
+        .container { max-width: 1400px; width: 100%; display: grid; grid-template-columns: 320px 1fr; gap: 20px; }
+        .sidebar { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); height: fit-content; }
+        .main-stage { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: flex; flex-direction: column; align-items: center; min-height: 600px; }
+        
+        /* Typography & Inputs */
+        h1 { margin-top: 0; color: var(--primary); }
+        h3 { margin-bottom: 8px; margin-top: 20px; font-size: 1.1em; color: #555; }
+        select, input, button { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px; box-sizing: border-box; }
+        
+        /* Buttons */
+        button { background: var(--primary); color: white; border: none; cursor: pointer; font-weight: bold; transition: background 0.2s; }
+        button:hover { background: #333; }
+        button.start-btn { background: #28a745; font-size: 1.2em; padding: 15px; margin-top: 10px; }
+        button.secondary { background: #6c757d; }
+        
+        /* Timer & Image */
+        #timer-display { font-size: 5em; font-family: 'Courier New', monospace; font-weight: bold; margin: 20px 0; color: var(--primary); letter-spacing: -2px; }
+        
+        /* Thumbnail Image (in main stage) */
+        .drawing-container { width: 100%; text-align: center; margin-top: 20px; cursor: zoom-in; position: relative; }
+        #drawing-img { max-width: 100%; max-height: 400px; border: 2px solid #ddd; display: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: transform 0.2s; }
+        #drawing-img:hover { transform: scale(1.02); border-color: var(--accent); }
+        .zoom-hint { color: #666; font-size: 0.9em; margin-top: 5px; font-style: italic; }
+
+        /* Full Screen Image Modal */
+        #img-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 2000; display: flex; justify-content: center; align-items: center; cursor: zoom-out; }
+        #modal-img { max-width: 95%; max-height: 95%; border: 2px solid white; box-shadow: 0 0 20px rgba(0,0,0,0.5); background: white; }
+        
+        /* Leaderboard */
+        .lb-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9em; }
+        .lb-table th, .lb-table td { padding: 8px; text-align: left; border-bottom: 1px solid #eee; }
+        .lb-table th { background-color: var(--primary); color: white; }
+        
+        /* Badges */
+        .meta-tags { display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap;}
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 0.75em; font-weight: bold; color: white; text-transform: uppercase; letter-spacing: 0.5px; }
+        .badge-tier { background-color: #6c757d; }
+        .badge-type { background-color: #007bff; }
+        
+        /* Utilities */
+        .hidden { display: none !important; }
+        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 1000; color: white;}
+        .loader { border: 5px solid #f3f3f3; border-top: 5px solid var(--accent); border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 20px;}
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        #status-msg { margin-top: 10px; font-weight: bold; font-size: 1.2em; }
+        .success { color: #28a745; }
+        .error { color: #dc3545; }
+        
+        .filter-group { display: flex; gap: 5px; }
+        .filter-group select { font-size: 0.9em; padding: 6px; }
+    </style>
+</head>
+<body>
+
+    <header style="width:100%; max-width:1400px; margin-bottom: 20px; display:flex; justify-content:space-between; align-items:center;">
+        <h1 style="margin:0;">NoMythic CAD Dojo</h1>
+        <div style="text-align:right; font-size:0.9em; color:#666;">Team 2491<br>Engineering Drills</div>
+    </header>
+
+    <div class="container">
+        <aside class="sidebar">
+            <h3>1. Identity</h3>
+            <input type="text" id="username" placeholder="Enter your name" />
+            
+            <h3>2. Filter Challenges</h3>
+            <div class="filter-group">
+                <select id="filter-tier" disabled><option value="all">All Tiers</option></select>
+                <select id="filter-type" disabled><option value="all">All Types</option></select>
+            </div>
+
+            <h3>3. Select Challenge</h3>
+            <select id="challenge-select" disabled>
+                <option>Not Connected</option>
+            </select>
+            
+            <div id="challenge-info" class="meta-tags hidden">
+                <span id="badge-tier" class="badge badge-tier">Tier ?</span>
+                <span id="badge-type" class="badge badge-type">Type ?</span>
+            </div>
+
+            <h3>Leaderboard</h3>
+            <div id="leaderboard-container">
+                <table class="lb-table">
+                    <thead><tr><th>Name</th><th>Time</th></tr></thead>
+                    <tbody id="lb-body"><tr><td colspan="2">...</td></tr></tbody>
+                </table>
+            </div>
+        </aside>
+
+        <main class="main-stage">
+            
+            <div id="controls-area" style="width: 100%; text-align: center; max-width: 600px;">
+                <p id="instruction-text">Connect to load the drawing library.</p>
+                <button id="connect-btn" style="background: #007bff; width: auto; padding: 12px 40px;">CONNECT TO SERVER</button>
+                <button id="start-btn" class="start-btn hidden">START CHALLENGE</button>
+            </div>
+
+            <div id="game-area" class="hidden" style="width: 100%; display: flex; flex-direction: column; align-items: center;">
+                
+                <div id="timer-display">0:00.00</div>
+                
+                <div style="display: flex; gap: 10px; width: 100%; max-width: 400px;">
+                    <input type="number" id="mass-input" placeholder="Enter Mass (lbs)" step="0.001" style="font-size: 1.2em; text-align: center;" />
+                    <button id="submit-btn" style="font-size: 1.2em;">CHECK</button>
+                </div>
+                
+                <div id="status-msg"></div>
+                
+                <button id="give-up-btn" class="secondary" style="background:none; color:#666; text-decoration:underline; border:none; margin-top:10px; width: auto;">Give Up / Reset</button>
+                
+                <div class="drawing-container">
+                    <img id="drawing-img" src="" alt="Engineering Drawing (Click to Zoom)" title="Click to Full Screen" />
+                    <div id="zoom-hint" class="zoom-hint hidden">(Click image to full screen)</div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="loader" class="overlay hidden">
+        <div class="loader"></div>
+        <div id="loader-text">Connecting to Google...</div>
+        <button onclick="forceCloseLoader()" style="margin-top:20px; width:auto; background:red; padding: 5px 15px; font-size:0.8em;">Force Close</button>
+    </div>
+
+    <div id="img-modal" class="hidden">
+        <img id="modal-img" src="" />
+    </div>
+
+    <script>
+        // ******************************************************
+        // PASTE YOUR URL HERE INSIDE THE QUOTES
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbySbSuNHBv5qHzOPPbahIdpjtfsjFjkaVXNrX9TpInFbcHw4KWTcZwQt3mZak77Ak6kxg/exec"; 
+        // ******************************************************
+
+        // STATE
+        let allChallenges = []; // Stores the full list
+        let globalLeaderboard = [];
+        let timerInterval;
+        let startTime;
+        let currentChallengeId = null;
+
+        // DOM ELEMENTS
+        const connectBtn = document.getElementById('connect-btn');
+        const startBtn = document.getElementById('start-btn');
+        const challengeSelect = document.getElementById('challenge-select');
+        const filterTier = document.getElementById('filter-tier');
+        const filterType = document.getElementById('filter-type');
+        const drawingImg = document.getElementById('drawing-img');
+        const modal = document.getElementById('img-modal');
+        const modalImg = document.getElementById('modal-img');
+        const loader = document.getElementById('loader');
+
+        // --- UTILITIES ---
+
+        function forceCloseLoader() { loader.classList.add('hidden'); }
+        
+        function formatTime(totalSeconds) {
+            const m = Math.floor(totalSeconds / 60);
+            const s = Math.floor(totalSeconds % 60);
+            const ms = Math.floor((totalSeconds % 1) * 100);
+            const formattedS = s.toString().padStart(2, '0');
+            const formattedMS = ms.toString().padStart(2, '0');
+            return `${m}:${formattedS}.${formattedMS}`;
+        }
+
+        // --- CONNECTION LOGIC ---
+
+        connectBtn.addEventListener('click', async () => {
+            loader.classList.remove('hidden');
+            
+            const timeout = setTimeout(() => {
+                loader.classList.add('hidden');
+                alert("Connection Timed Out! (8s)\n\nGoogle didn't answer.");
+            }, 8000);
+
+            try {
+                const response = await fetch(`${SCRIPT_URL}?action=get_challenges&t=${Date.now()}`);
+                const rawText = await response.text();
+                clearTimeout(timeout);
+                const data = JSON.parse(rawText);
+                
+                allChallenges = data.challenges;
+                globalLeaderboard = data.leaderboard;
+
+                populateFilters();
+                filterChallenges(); 
+
+                challengeSelect.disabled = false;
+                filterTier.disabled = false;
+                filterType.disabled = false;
+                connectBtn.classList.add('hidden');
+                startBtn.classList.remove('hidden');
+                document.getElementById('instruction-text').innerText = "Select filters to find your drill.";
+                loader.classList.add('hidden');
+
+            } catch (err) {
+                clearTimeout(timeout);
+                loader.classList.add('hidden');
+                alert("Error:\n" + err);
+            }
+        });
+
+        // --- FILTER & DROPDOWN LOGIC ---
+
+        function populateFilters() {
+            const tiers = [...new Set(allChallenges.map(c => c.complexity))].sort();
+            const types = [...new Set(allChallenges.map(c => c.type))].sort();
+
+            filterTier.innerHTML = '<option value="all">All Tiers</option>';
+            tiers.forEach(t => { if(t) filterTier.innerHTML += `<option value="${t}">${t}</option>`; });
+
+            filterType.innerHTML = '<option value="all">All Types</option>';
+            types.forEach(t => { if(t) filterType.innerHTML += `<option value="${t}">${t}</option>`; });
+        }
+
+        function filterChallenges() {
+            const selectedTier = filterTier.value;
+            const selectedType = filterType.value;
+
+            const filtered = allChallenges.filter(c => {
+                const matchTier = (selectedTier === "all") || (c.complexity === selectedTier);
+                const matchType = (selectedType === "all") || (c.type === selectedType);
+                return matchTier && matchType;
+            });
+
+            challengeSelect.innerHTML = '<option value="" disabled selected>Select a Challenge...</option>';
+            if (filtered.length === 0) {
+                challengeSelect.innerHTML += '<option disabled>No matches found</option>';
+            } else {
+                filtered.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c.id;
+                    opt.innerText = `${c.name} (${c.complexity})`; 
+                    challengeSelect.appendChild(opt);
+                });
+            }
+        }
+
+        filterTier.addEventListener('change', filterChallenges);
+        filterType.addEventListener('change', filterChallenges);
+
+        // --- GAME LOGIC ---
+
+        challengeSelect.addEventListener('change', () => {
+            currentChallengeId = challengeSelect.value;
+            const currentC = allChallenges.find(c => c.id == currentChallengeId);
+            
+            document.getElementById('challenge-info').classList.remove('hidden');
+            document.getElementById('badge-tier').innerText = currentC.complexity || "Tier ?";
+            document.getElementById('badge-type').innerText = currentC.type || "General";
+            
+            updateLeaderboard(currentChallengeId);
+            stopTimer(); 
+            document.getElementById('timer-display').innerText = "0:00.00";
+            document.getElementById('controls-area').classList.remove('hidden');
+            document.getElementById('game-area').classList.add('hidden');
+        });
+
+        // LEADERBOARD DEDUPLICATION LOGIC
+        function updateLeaderboard(cId) {
+            const lbBody = document.getElementById('lb-body');
+            lbBody.innerHTML = '';
+            
+            // 1. Filter for this challenge
+            const rawEntries = globalLeaderboard.filter(entry => String(entry.challenge_id) === String(cId));
+            
+            // 2. Deduplicate: Keep only lowest time per unique name
+            const bestTimesMap = new Map();
+            
+            rawEntries.forEach(entry => {
+                const name = entry.name.trim(); // Normalize name
+                const time = parseFloat(entry.time);
+                
+                if (!bestTimesMap.has(name)) {
+                    bestTimesMap.set(name, entry);
+                } else {
+                    const existingEntry = bestTimesMap.get(name);
+                    if (time < parseFloat(existingEntry.time)) {
+                        bestTimesMap.set(name, entry);
+                    }
+                }
+            });
+
+            // 3. Convert Map back to Array and Sort
+            const sortedEntries = Array.from(bestTimesMap.values())
+                .sort((a, b) => parseFloat(a.time) - parseFloat(b.time));
+
+            // 4. Render
+            if (sortedEntries.length === 0) lbBody.innerHTML = '<tr><td colspan="2">No attempts yet.</td></tr>';
+            
+            sortedEntries.slice(0, 10).forEach(entry => {
+                lbBody.innerHTML += `<tr><td>${entry.name}</td><td>${formatTime(entry.time)}</td></tr>`;
+            });
+        }
+
+        function runTimer() {
+             timerInterval = setInterval(() => {
+                const elapsed = (Date.now() - startTime) / 1000;
+                document.getElementById('timer-display').innerText = formatTime(elapsed);
+            }, 10);
+        }
+
+        function stopTimer() {
+            clearInterval(timerInterval);
+        }
+
+        startBtn.addEventListener('click', () => {
+            if(!document.getElementById('username').value) { alert("Enter your name!"); return; }
+            if(!currentChallengeId) { alert("Select a challenge!"); return; }
+            
+            const challenge = allChallenges.find(c => c.id == currentChallengeId);
+            drawingImg.src = challenge.image;
+            modalImg.src = challenge.image; 
+            
+            document.getElementById('controls-area').classList.add('hidden');
+            document.getElementById('game-area').classList.remove('hidden');
+            drawingImg.style.display = 'inline-block';
+            document.getElementById('zoom-hint').classList.remove('hidden');
+            
+            document.getElementById('status-msg').innerHTML = ''; 
+            document.getElementById('mass-input').value = '';
+            
+            startTime = Date.now();
+            runTimer();
+        });
+
+        document.getElementById('give-up-btn').addEventListener('click', () => {
+            stopTimer();
+            document.getElementById('controls-area').classList.remove('hidden');
+            document.getElementById('game-area').classList.add('hidden');
+            document.getElementById('timer-display').innerText = "0:00.00";
+        });
+
+        document.getElementById('submit-btn').addEventListener('click', async () => {
+            const userMass = document.getElementById('mass-input').value;
+            if(!userMass) return;
+            
+            stopTimer();
+            const timeTaken = (Date.now() - startTime) / 1000;
+            const userName = document.getElementById('username').value;
+            const statusMsg = document.getElementById('status-msg');
+
+            loader.classList.remove('hidden');
+            
+            const formData = new FormData();
+            formData.append('action', 'submit_attempt');
+            formData.append('challengeId', currentChallengeId);
+            formData.append('userMass', userMass);
+            formData.append('userName', userName);
+            formData.append('timeSeconds', timeTaken); 
+
+            try {
+                const response = await fetch(`${SCRIPT_URL}?t=${Date.now()}`, { method: 'POST', body: formData });
+                const rawText = await response.text();
+                const result = JSON.parse(rawText);
+
+                if (result.correct) {
+                    statusMsg.className = 'success';
+                    statusMsg.innerHTML = `🎉 CORRECT! Time: ${formatTime(timeTaken)}`;
+                    
+                    // Add to global leaderboard, then trigger update which now deduplicates
+                    globalLeaderboard.push({name: userName, challenge_id: currentChallengeId, time: timeTaken});
+                    updateLeaderboard(currentChallengeId);
+                } else {
+                    runTimer();
+                    statusMsg.className = 'error';
+                    statusMsg.innerText = "❌ Incorrect Mass. Timer resumed!";
+                }
+            } catch (e) {
+                alert("Error submitting: " + e);
+                runTimer(); 
+            } finally {
+                loader.classList.add('hidden');
+            }
+        });
+
+        // --- MODAL LOGIC (ZOOM) ---
+        drawingImg.addEventListener('click', () => { modal.classList.remove('hidden'); });
+        modal.addEventListener('click', () => { modal.classList.add('hidden'); });
+
+        document.getElementById('mass-input').addEventListener("keypress", function(event) {
+            if (event.key === "Enter") { event.preventDefault(); document.getElementById('submit-btn').click(); }
+        });
+    </script>
+</body>
+</html>
